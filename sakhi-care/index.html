@@ -489,7 +489,7 @@ $("bannerBtn").onclick = resolveAll;
 $("testBtn").onclick = async () => {
   try{
     await db.ref("alerts").push({reason:"test", message:"Test alert from SAKHI Care", status:"active",
-      lat:11.5009, lng:76.4919, time:firebase.database.ServerValue.TIMESTAMP, source:"app"});
+      time:firebase.database.ServerValue.TIMESTAMP, source:"app"});
     toast("Test alert sent ✓"); go("home");
   }catch(e){ toast("Could not send: " + e.message); }
 };

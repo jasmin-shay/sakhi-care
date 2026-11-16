@@ -58,6 +58,7 @@
   .hero{border-radius:22px;padding:20px;color:#fff;background:linear-gradient(140deg,#1E6B3E,#14532D);
         display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden}
   .hero.alert{background:linear-gradient(140deg,#D32F2F,#A31515)}
+  .hero.private{background:linear-gradient(140deg,#4B5563,#2D3440)}
   .hero .row{display:flex;align-items:center;gap:14px}
   .hero .ic{width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;
             justify-content:center;flex:none}
@@ -314,6 +315,7 @@ const localAck = new Set();
 let soundOn = store.get("sound", false);
 let audioCtx = null, alarmTimer = null, started = false;
 let map = null, marker = null;
+let isPrivate = false, hasEmergency = false;
 
 /* ---------- settings ---------- */
 function applySettings(){
@@ -364,6 +366,14 @@ function latestLocation(){
   return best;
 }
 function showLoc(){
+  if(isPrivate && !hasEmergency){
+    const name = store.get("name", "Amma") || "Amma";
+    $("locShort").textContent = "🔒 Location hidden"; $("qaLoc").textContent = "Hidden (private mode)";
+    $("locFull").textContent = `Location is hidden while ${name} is in private mode. It is shared automatically if there is an emergency.`;
+    $("gmapBtn").href = "#"; $("dirBtn").href = "#";
+    if(marker && map){ map.removeLayer(marker); marker = null; }
+    return;
+  }
   const p = latestLocation();
   if(!p){ $("locShort").textContent = "No location yet"; $("qaLoc").textContent = "No location yet"; return; }
   $("locShort").textContent = "Location " + ago(p.time);
@@ -389,6 +399,7 @@ function stopAlarm(){ clearInterval(alarmTimer); alarmTimer = null; }
 
 /* ---------- render ---------- */
 const ICON_OK = '<svg width="30" height="30" viewBox="0 0 24 24" style="stroke:#fff"><path d="M20 6L9 17l-5-5"/></svg>';
+const ICON_LOCK = '<svg width="30" height="30" viewBox="0 0 24 24" style="stroke:#fff"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 const ICON_ALERT = '<svg width="30" height="30" viewBox="0 0 24 24" style="stroke:#fff"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
 
 function alertRow(id, a, withBtn){
@@ -407,13 +418,15 @@ function render(){
   const name = store.get("name", "Amma") || "Amma";
   const list = vals(alerts).sort((a,b) => (b[1].time||0) - (a[1].time||0));
   const active = list.filter(([id,a]) => a.status === "active" && !localAck.has(id));
+  hasEmergency = active.length > 0;
+  isPrivate = !!(status && status.mode === "private");
 
   // hero + banner
   const hero = $("hero");
   if(active.length){
     const [, a] = active[0];
     const r = REASONS[a.reason] || {label:"Emergency"};
-    hero.classList.add("alert");
+    hero.classList.remove("private"); hero.classList.add("alert");
     $("heroIc").innerHTML = ICON_ALERT;
     $("heroTitle").textContent = "Emergency: " + r.label;
     $("heroSub").textContent = `${timeOf(a.time)} · SAKHI is calling you. Check on ${name}.`;
@@ -422,8 +435,15 @@ function render(){
     $("bannerSub").textContent = `${name} · ${ago(a.time)}`;
     startAlarm();
     if(navigator.vibrate && soundOn) navigator.vibrate([300,150,300]);
+  } else if(isPrivate){
+    hero.classList.remove("alert"); hero.classList.add("private");
+    $("heroIc").innerHTML = ICON_LOCK;
+    $("heroTitle").textContent = "Private mode";
+    $("heroSub").textContent = `${name} asked for privacy. Camera and location are off – you will still be alerted in an emergency.`;
+    $("banner").classList.remove("show");
+    stopAlarm();
   } else {
-    hero.classList.remove("alert");
+    hero.classList.remove("alert"); hero.classList.remove("private");
     $("heroIc").innerHTML = ICON_OK;
     $("heroTitle").textContent = "All is well";
     $("heroSub").innerHTML = `Watching over <span class="wname">${esc(name)}</span>`;

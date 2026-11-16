@@ -343,8 +343,18 @@ document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", 
 function initMap(){
   if(map) return;
   map = L.map("map", {zoomControl:true}).setView([11.5, 76.49], 13);
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-              {maxZoom:19, attribution:"Tiles &copy; Esri"}).addTo(map);
+  // Street map with small roads, shops and local place names (OpenStreetMap)
+  const street = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+              {maxZoom:19, attribution:"&copy; OpenStreetMap contributors"});
+  // Satellite photo + place labels, to see the actual houses and surroundings
+  const satellite = L.layerGroup([
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                {maxZoom:19, attribution:"Imagery &copy; Esri"}),
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+                {maxZoom:19})
+  ]);
+  street.addTo(map);
+  L.control.layers({"Street": street, "Satellite": satellite}, null, {collapsed:false}).addTo(map);
 }
 function latestLocation(){
   let best = loc && loc.lat != null ? {lat:+loc.lat, lng:+loc.lng, time:+loc.time || 0} : null;
@@ -363,7 +373,7 @@ function showLoc(){
   $("dirBtn").href = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
   if(map){
     if(!marker) marker = L.marker([p.lat, p.lng]).addTo(map); else marker.setLatLng([p.lat, p.lng]);
-    map.setView([p.lat, p.lng], 16);
+    map.setView([p.lat, p.lng], 17);
   }
 }
 
@@ -468,7 +478,12 @@ db.ref(".info/connected").on("value", s => {
 db.ref("alerts").on("value",   s => { alerts = s.val() || {}; render(); });
 db.ref("medicine").on("value", s => { meds   = s.val() || {}; render(); });
 db.ref("reports").on("value",  s => { notes  = s.val() || {}; render(); });
-db.ref("location").on("value", s => { loc    = s.val();       render(); });
+db.ref("location").on("value", s => {
+  loc = s.val();
+  // the phone sends only lat/lng - stamp the time it arrived
+  if(loc && loc.lat != null && !loc.time) db.ref("location/time").set(firebase.database.ServerValue.TIMESTAMP).catch(() => {});
+  render();
+});
 db.ref("status").on("value",   s => { status = s.val();       render(); });
 setInterval(render, 30000);   // keep "x min ago" fresh
 
